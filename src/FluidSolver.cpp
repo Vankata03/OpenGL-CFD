@@ -19,6 +19,7 @@ FluidSolver::FluidSolver(int width, int height)
 
 FluidSolver::~FluidSolver()
 {
+
 }
 
 int FluidSolver::GetIndex(int x, int y) const
@@ -30,7 +31,6 @@ int FluidSolver::GetIndex(int x, int y) const
 
 void FluidSolver::Step(float dt)
 {
-    // Swap current and previous arrays to use previous as source
     std::swap(m_VelocityX, m_VelocityXPrev);
     std::swap(m_VelocityY, m_VelocityYPrev);
 
@@ -63,15 +63,14 @@ void FluidSolver::Step(float dt)
 }
 
 void FluidSolver::Advect(int boundaryType, std::vector<float>& destField, const std::vector<float>& sourceField,
-                        const std::vector<float>& velocityX, const std::vector<float>& velocityY, float dt)
+                        const std::vector<float>& velocityX, const std::vector<float>& velocityY, float deltaTime)
 {
-    float dt0_x = dt * (m_Width - 2);
-    float dt0_y = dt * (m_Height - 2);
+    float dt0_x = deltaTime * (m_Width - 2);
+    float dt0_y = deltaTime * (m_Height - 2);
 
     for (int j = 1; j < m_Height - 1; j++) {
         for (int i = 1; i < m_Width - 1; i++) {
 
-            // Handle obstacles
             if (m_SolidMask[GetIndex(i, j)] > 0.0f) {
                 destField[GetIndex(i, j)] = 0.0f;
                 continue;
@@ -108,9 +107,10 @@ void FluidSolver::Advect(int boundaryType, std::vector<float>& destField, const 
     SetBoundaries(boundaryType, destField);
 }
 
-void FluidSolver::Diffuse(int boundaryType, std::vector<float>& destField, const std::vector<float>& sourceField, float diffRate, float dt)
+void FluidSolver::Diffuse(int boundaryType, std::vector<float>& destField, const std::vector<float>& sourceField, float diffRate, float deltaTime)
 {
-    float a = dt * diffRate * (m_Width - 2) * (m_Height - 2);
+    // Diffusion coefficient used by the Gauss-Seidel/Jacobi relaxation
+    float diffusionCoefficient = deltaTime * diffRate * (m_Width - 2) * (m_Height - 2);
 
     for (int k = 0; k < m_Iterations; k++) {
         for (int j = 1; j < m_Height - 1; j++) {
@@ -139,7 +139,7 @@ void FluidSolver::Diffuse(int boundaryType, std::vector<float>& destField, const
                 }
 
                 // Jacobi iteration step
-                destField[GetIndex(i, j)] = (sourceField[GetIndex(i, j)] + a * (valLeft + valRight + valBottom + valTop)) / (1 + 4 * a);
+                destField[GetIndex(i, j)] = (sourceField[GetIndex(i, j)] + diffusionCoefficient * (valLeft + valRight + valBottom + valTop)) / (1 + 4 * diffusionCoefficient);
             }
         }
         SetBoundaries(boundaryType, destField);
@@ -150,7 +150,7 @@ void FluidSolver::Project(std::vector<float>& velocX, std::vector<float>& velocY
 {
     float h = 1.0f / m_Width;
 
-    // 1. Compute Divergence
+    // Divergence
     for (int j = 1; j < m_Height - 1; j++) {
         for (int i = 1; i < m_Width - 1; i++) {
 
@@ -169,14 +169,14 @@ void FluidSolver::Project(std::vector<float>& velocX, std::vector<float>& velocY
     SetBoundaries(0, divergence);
     SetBoundaries(3, pressure); // 3 = Pressure specific boundary
 
-    // 2. Solve Pressure (Poisson equation)
+    // Solve Pressure (Poisson equation)
     for (int k = 0; k < m_Iterations; k++) {
         for (int j = 1; j < m_Height - 1; j++) {
             for (int i = 1; i < m_Width - 1; i++) {
 
                 if (m_SolidMask[GetIndex(i, j)] > 0.0f) continue;
 
-                // Neumann boundary condition at obstacles (pressure gradient = 0)
+                // Neumann boundary condition at obstacles
                 float pLeft   = (m_SolidMask[GetIndex(i - 1, j)] > 0.0f) ? pressure[GetIndex(i, j)] : pressure[GetIndex(i - 1, j)];
                 float pRight  = (m_SolidMask[GetIndex(i + 1, j)] > 0.0f) ? pressure[GetIndex(i, j)] : pressure[GetIndex(i + 1, j)];
                 float pBottom = (m_SolidMask[GetIndex(i, j - 1)] > 0.0f) ? pressure[GetIndex(i, j)] : pressure[GetIndex(i, j - 1)];
@@ -188,7 +188,7 @@ void FluidSolver::Project(std::vector<float>& velocX, std::vector<float>& velocY
         SetBoundaries(3, pressure);
     }
 
-    // 3. Subtract Gradient from Velocity
+    // Subtract Gradient from Velocity
     for (int j = 1; j < m_Height - 1; j++) {
         for (int i = 1; i < m_Width - 1; i++) {
 
@@ -214,11 +214,8 @@ void FluidSolver::Project(std::vector<float>& velocX, std::vector<float>& velocY
 
 void FluidSolver::SetBoundaries(int boundaryType, std::vector<float>& field)
 {
-    // Simple box boundaries
     for (int i = 1; i < m_Width - 1; i++) {
         // Top and Bottom walls
-        // If handling vertical velocity (2), flip sign at boundary (reflection/bounce)
-        // Otherwise copy value (no-flux/slip)
         field[GetIndex(i, 0)]             = (boundaryType == 2) ? -field[GetIndex(i, 1)] : field[GetIndex(i, 1)];
         field[GetIndex(i, m_Height - 1)]  = (boundaryType == 2) ? -field[GetIndex(i, m_Height - 2)] : field[GetIndex(i, m_Height - 2)];
     }
@@ -230,16 +227,15 @@ void FluidSolver::SetBoundaries(int boundaryType, std::vector<float>& field)
             field[GetIndex(0, j)] = field[GetIndex(1, j)];
             field[GetIndex(m_Width - 1, j)] = 0.0f;
         } else {
-             // Zero-gradient for others (Inflow/Outflow handling handles the rest)
             field[GetIndex(0, j)] = field[GetIndex(1, j)];
             field[GetIndex(m_Width - 1, j)] = field[GetIndex(m_Width - 2, j)];
         }
     }
 
     // Corners (average of neighbors)
-    field[GetIndex(0, 0)]                 = 0.5f * (field[GetIndex(1, 0)] + field[GetIndex(0, 1)]);
-    field[GetIndex(0, m_Height - 1)]      = 0.5f * (field[GetIndex(1, m_Height - 1)] + field[GetIndex(0, m_Height - 2)]);
-    field[GetIndex(m_Width - 1, 0)]       = 0.5f * (field[GetIndex(m_Width - 2, 0)] + field[GetIndex(m_Width - 1, 1)]);
+    field[GetIndex(0, 0)]                      = 0.5f * (field[GetIndex(1, 0)] + field[GetIndex(0, 1)]);
+    field[GetIndex(0, m_Height - 1)]           = 0.5f * (field[GetIndex(1, m_Height - 1)] + field[GetIndex(0, m_Height - 2)]);
+    field[GetIndex(m_Width - 1, 0)]            = 0.5f * (field[GetIndex(m_Width - 2, 0)] + field[GetIndex(m_Width - 1, 1)]);
     field[GetIndex(m_Width - 1, m_Height - 1)] = 0.5f * (field[GetIndex(m_Width - 2, m_Height - 1)] + field[GetIndex(m_Width - 1, m_Height - 2)]);
 }
 
@@ -297,17 +293,15 @@ void FluidSolver::ApplyInflow()
 
 void FluidSolver::InitObstacle()
 {
-    // Clear obstacle
     std::fill(m_SolidMask.begin(), m_SolidMask.end(), 0.0f);
 
-    int centerX = m_Width / 3; // Position at 1/3 of screen width
+    int centerX = m_Width / 3;
     int centerY = m_Height / 2;
     int chordLength = m_Width / 4;
-    float thickness = 0.15f; // 15% thickness
+    float thickness = 0.15f;
 
     for (int j = 0; j < m_Height; j++) {
         for (int i = 0; i < m_Width; i++) {
-            // Transform to local coordinates of the airfoil
             float localX = (float)(i - centerX) / chordLength;
             float localY = (float)(j - centerY) / chordLength;
 
@@ -330,9 +324,7 @@ void FluidSolver::InitObstacle()
 void FluidSolver::SetObstacleMask(const std::vector<float>& mask)
 {
     if (mask.size() != m_Size) return;
-
-    m_SolidMask
- = mask;
+    m_SolidMask = mask;
 
     // Clear velocity inside obstacle
     for (int i = 0; i < m_Size; i++) {

@@ -10,8 +10,7 @@ public:
     Slicer(int width, int height);
     ~Slicer();
 
-    // Renders the mesh cross-section and returns a flat array (width * height)
-    // where 1.0f = solid, 0.0f = empty.
+    // Renders the mesh cross-section and returns a flat array (width * height), 1.0f = solid, 0.0f = empty.
     std::vector<float> Capture(Mesh& mesh, const glm::mat4& modelMatrix, float sliceZ, float thickness);
 
 private:
@@ -23,6 +22,6 @@ private:
     int m_Height;
 
     unsigned int m_FBO = 0;
-    unsigned int m_Texture = 0; // The texture we render to
+    unsigned int m_Texture = 0;
     Shader m_Shader;
 };

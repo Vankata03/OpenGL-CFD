@@ -138,22 +138,18 @@ void Renderer::Draw(const FluidSolver& solver, int displayWidth, int displayHeig
     int width = solver.GetWidth();
     int height = solver.GetHeight();
 
-    // Initialize or resize textures if needed
     if (m_GridWidth != width || m_GridHeight != height) {
         InitTextures(width, height);
     }
 
-    // Update texture data
     UpdateTexture(m_TextureVelocityX, width, height, solver.GetVelocityX());
     UpdateTexture(m_TextureVelocityY, width, height, solver.GetVelocityY());
     UpdateTexture(m_TexturePressure, width, height, solver.GetPressure());
     UpdateTexture(m_TextureDyeDensity, width, height, solver.GetDyeDensity());
     UpdateTexture(m_TextureObstacleMask, width, height, solver.GetSolidMask());
 
-    // Use Shader
     m_ShaderProgram.use();
 
-    // Bind Textures
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, m_TextureVelocityX);
     m_ShaderProgram.setInt("velocityXTexture", 0);
@@ -174,12 +170,10 @@ void Renderer::Draw(const FluidSolver& solver, int displayWidth, int displayHeig
     glBindTexture(GL_TEXTURE_2D, m_TextureObstacleMask);
     m_ShaderProgram.setInt("solidMaskTexture", 4);
 
-    // Set Uniforms
     m_ShaderProgram.setInt("displayMode", (int)m_CurrentMode);
     m_ShaderProgram.setMat4("viewProjection", viewProjection);
     m_ShaderProgram.setVec2("gridSize", (float)width, (float)height);
 
-    // Draw Quad
     glBindVertexArray(m_QuadVAO);
     glDrawArrays(GL_TRIANGLES, 0, 6);
     glBindVertexArray(0);
@@ -223,15 +217,15 @@ void Renderer::InitTextures(int width, int height)
 
     auto setupTexture = [&](unsigned int& texID) {
         if (texID != 0) glDeleteTextures(1, &texID);
+
         glGenTextures(1, &texID);
         glBindTexture(GL_TEXTURE_2D, texID);
-        // Set texture parameters (Linear interpolation for smoothing visual, Clamp to Edge)
+
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-        // Allocate memory
         glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, width, height, 0, GL_RED, GL_FLOAT, NULL);
     };
 
@@ -241,8 +235,6 @@ void Renderer::InitTextures(int width, int height)
     setupTexture(m_TextureDyeDensity);
     setupTexture(m_TextureObstacleMask);
 }
-
-
 
 void Renderer::UpdateTexture(GLuint textureID, int width, int height, const std::vector<float>& data)
 {
@@ -254,8 +246,6 @@ void Renderer::CreateShader()
 {
     m_ShaderProgram.Load("src/Shaders/fluid.vert", "src/Shaders/fluid.frag");
 }
-
-
 
 void Renderer::CreateMeshShader()
 {

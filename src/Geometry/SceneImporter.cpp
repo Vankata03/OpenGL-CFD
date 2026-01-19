@@ -5,7 +5,6 @@
 #include <tiny_gltf.h>
 #include "SceneImporter.h"
 #include <iostream>
-#include <algorithm>
 
 std::unique_ptr<Mesh> SceneImporter::LoadGLTF(const std::string& filepath) {
     tinygltf::Model model;
@@ -37,10 +36,8 @@ std::unique_ptr<Mesh> SceneImporter::LoadGLTF(const std::string& filepath) {
     std::vector<unsigned int> globalIndices;
 
     // Iterate over all meshes and primitives to flatten the geometry
-    // Note: This ignores scene hierarchy transforms for simplicity, assuming baked or single mesh
     for (const auto& mesh : model.meshes) {
         for (const auto& primitive : mesh.primitives) {
-            // Check for Position attribute
             if (primitive.attributes.find("POSITION") == primitive.attributes.end())
                 continue;
 
@@ -48,7 +45,7 @@ std::unique_ptr<Mesh> SceneImporter::LoadGLTF(const std::string& filepath) {
             const tinygltf::Accessor& posAccessor = model.accessors[primitive.attributes.at("POSITION")];
             const tinygltf::BufferView& posView = model.bufferViews[posAccessor.bufferView];
             const tinygltf::Buffer& posBuffer = model.buffers[posView.buffer];
-            
+
             const unsigned char* posData = &posBuffer.data[posView.byteOffset + posAccessor.byteOffset];
             int posStride = posAccessor.ByteStride(posView) ? posAccessor.ByteStride(posView) : sizeof(float) * 3;
 
@@ -59,7 +56,7 @@ std::unique_ptr<Mesh> SceneImporter::LoadGLTF(const std::string& filepath) {
                 const tinygltf::Accessor& normAccessor = model.accessors[primitive.attributes.at("NORMAL")];
                 const tinygltf::BufferView& normView = model.bufferViews[normAccessor.bufferView];
                 const tinygltf::Buffer& normBuffer = model.buffers[normView.buffer];
-                
+
                 normData = &normBuffer.data[normView.byteOffset + normAccessor.byteOffset];
                 normStride = normAccessor.ByteStride(normView) ? normAccessor.ByteStride(normView) : sizeof(float) * 3;
             }
@@ -71,7 +68,7 @@ std::unique_ptr<Mesh> SceneImporter::LoadGLTF(const std::string& filepath) {
                 const tinygltf::Accessor& uvAccessor = model.accessors[primitive.attributes.at("TEXCOORD_0")];
                 const tinygltf::BufferView& uvView = model.bufferViews[uvAccessor.bufferView];
                 const tinygltf::Buffer& uvBuffer = model.buffers[uvView.buffer];
-                
+
                 uvData = &uvBuffer.data[uvView.byteOffset + uvAccessor.byteOffset];
                 uvStride = uvAccessor.ByteStride(uvView) ? uvAccessor.ByteStride(uvView) : sizeof(float) * 2;
             }
@@ -80,26 +77,26 @@ std::unique_ptr<Mesh> SceneImporter::LoadGLTF(const std::string& filepath) {
 
             // Read Vertices
             for (size_t i = 0; i < posAccessor.count; ++i) {
-                Vertex v;
-                
+                Vertex vertex;
+
                 const float* p = reinterpret_cast<const float*>(posData + i * posStride);
-                v.Position = glm::vec3(p[0], p[1], p[2]);
-                
+                vertex.Position = glm::vec3(p[0], p[1], p[2]);
+
                 if (normData) {
                     const float* n = reinterpret_cast<const float*>(normData + i * normStride);
-                    v.Normal = glm::vec3(n[0], n[1], n[2]);
+                    vertex.Normal = glm::vec3(n[0], n[1], n[2]);
                 } else {
-                    v.Normal = glm::vec3(0.0f);
+                    vertex.Normal = glm::vec3(0.0f);
                 }
 
                 if (uvData) {
                     const float* uv = reinterpret_cast<const float*>(uvData + i * uvStride);
-                    v.TexCoords = glm::vec2(uv[0], uv[1]);
+                    vertex.TexCoords = glm::vec2(uv[0], uv[1]);
                 } else {
-                    v.TexCoords = glm::vec2(0.0f);
+                    vertex.TexCoords = glm::vec2(0.0f);
                 }
-                
-                globalVertices.push_back(v);
+
+                globalVertices.push_back(vertex);
             }
 
             // Read Indices
@@ -107,14 +104,14 @@ std::unique_ptr<Mesh> SceneImporter::LoadGLTF(const std::string& filepath) {
                 const tinygltf::Accessor& idxAccessor = model.accessors[primitive.indices];
                 const tinygltf::BufferView& idxView = model.bufferViews[idxAccessor.bufferView];
                 const tinygltf::Buffer& idxBuffer = model.buffers[idxView.buffer];
-                
+
                 const unsigned char* idxData = &idxBuffer.data[idxView.byteOffset + idxAccessor.byteOffset];
                 int idxByteStride = idxAccessor.ByteStride(idxView);
 
                 for (size_t i = 0; i < idxAccessor.count; ++i) {
                     unsigned int index = 0;
-                    const unsigned char* ptr = idxData + i * (idxByteStride ? idxByteStride : 
-                        (idxAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT ? 2 : 
+                    const unsigned char* ptr = idxData + i * (idxByteStride ? idxByteStride :
+                        (idxAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT ? 2 :
                         (idxAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT ? 4 : 1)));
 
                     if (idxAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT) {
@@ -142,23 +139,23 @@ std::unique_ptr<Mesh> SceneImporter::LoadGLTF(const std::string& filepath) {
         const tinygltf::Texture& tex = model.textures[0];
         if (tex.source > -1 && tex.source < (int)model.images.size()) {
             const tinygltf::Image& image = model.images[tex.source];
-            
+
             unsigned int textureID;
             glGenTextures(1, &textureID);
             glBindTexture(GL_TEXTURE_2D, textureID);
-            
+
             GLenum format = GL_RGBA;
             if (image.component == 3) format = GL_RGB;
             else if (image.component == 1) format = GL_RED;
-            
+
             glTexImage2D(GL_TEXTURE_2D, 0, format, image.width, image.height, 0, format, GL_UNSIGNED_BYTE, &image.image[0]);
             glGenerateMipmap(GL_TEXTURE_2D);
-            
+
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            
+
             mesh->SetTexture(textureID);
         }
     }

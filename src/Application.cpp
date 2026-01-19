@@ -19,14 +19,10 @@ Application::Application(const std::string& title, int width, int height)
 {
     Init();
 
-    // Initialize simulation with a 2:1 aspect ratio grid (256x128)
-    // This allows for a reasonable flow field resolution
     m_Solver = std::make_unique<FluidSolver>(256, 128);
     m_Renderer = std::make_unique<Renderer>();
     m_Slicer = std::make_unique<Slicer>(256, 128);
 }
-
-
 
 Application::~Application()
 {
@@ -43,6 +39,7 @@ void Application::Init()
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE); // Enable forward compatibility - MacOS
 
     m_Window = glfwCreateWindow(m_WindowWidth, m_WindowHeight, m_Title.c_str(), NULL, NULL);
     if (!m_Window) {
@@ -52,31 +49,28 @@ void Application::Init()
     }
 
     glfwMakeContextCurrent(m_Window);
-    glfwSwapInterval(1); // Enable vsync
+    glfwSwapInterval(1);
 
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
         std::cerr << "Failed to initialize GLAD" << std::endl;
         exit(EXIT_FAILURE);
     }
 
-    // Setup Dear ImGui context
+    // Setup Dear ImGui
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO(); (void)io;
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
-    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;         // Enable Docking
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
-    // Setup Dear ImGui style
     ImGui::StyleColorsDark();
 
-    // Setup Platform/Renderer backends
     ImGui_ImplGlfw_InitForOpenGL(m_Window, true);
     ImGui_ImplOpenGL3_Init("#version 330");
 }
 
 void Application::Shutdown()
 {
-    // Release resources in reverse order of dependency
     m_Mesh.reset();
     m_Slicer.reset();
     m_Renderer.reset();
@@ -107,7 +101,6 @@ void Application::Run()
         }
 
         Render();
-
         glfwPollEvents();
     }
 }
@@ -116,8 +109,6 @@ void Application::ProcessInput()
 {
     if (glfwGetKey(m_Window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(m_Window, true);
-
-
 }
 
 void Application::Update(float deltaTime)
@@ -129,7 +120,6 @@ void Application::Update(float deltaTime)
 
 void Application::Render()
 {
-    // Clear screen
     int display_w, display_h;
     glfwGetFramebufferSize(m_Window, &display_w, &display_h);
     glViewport(0, 0, display_w, display_h);
@@ -137,7 +127,7 @@ void Application::Render()
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glEnable(GL_DEPTH_TEST);
 
-    // ViewProjection (2D Ortho)
+    // ViewProjection (2D Orthographic)
     glm::mat4 viewProjection;
     if (m_Solver)
         viewProjection = glm::ortho(0.0f, (float)m_Solver->GetWidth(), 0.0f, (float)m_Solver->GetHeight(), -1000.0f, 1000.0f);
@@ -166,9 +156,7 @@ void Application::Render()
         m_Renderer->DrawMeshViews(*m_Mesh, model, m_SliceZ, m_SliceThickness);
     }
 
-    // Render UI
     RenderUI();
-
     glfwSwapBuffers(m_Window);
 }
 
