@@ -34,11 +34,11 @@ We will use a **Colocated Grid** (Cell-Centered) for simplicity, where all varia
 ### Data Arrays (Flat `std::vector<float>`)
 The solver requires two buffers for most fields (current state and previous state) to handle implicit integration steps.
 
-*   `u[size]`, `u_prev[size]`: Horizontal velocity component.
-*   `v[size]`, `v_prev[size]`: Vertical velocity component.
-*   `p[size]`, `div[size]`: Pressure and Divergence.
-*   `s[size]`: Solid mask (0.0 = fluid, 1.0 = solid).
-*   `dye[size]`: Passive scalar (smoke/dye) for basic visualization.
+*   `VelocityX`, `VelocityXPrev`: Horizontal velocity component.
+*   `VelocityY`, `VelocityYPrev`: Vertical velocity component.
+*   `Pressure`, `Divergence`: Pressure field and velocity divergence.
+*   `SolidMask`: Solid mask (0.0 = fluid, 1.0 = solid).
+*   `DyeDensity`: Passive scalar (smoke/dye) for visualization.
 
 ### Indexing
 `index(i, j) = i + (N + 2) * j`
@@ -62,38 +62,24 @@ The F1 profile is rasterized into the `s[]` array.
 
 ---
 
-## 4. Solver Pseudocode (Stable Fluids)
+## 4. Algorithm Overview (Stable Fluids)
 
-```cpp
-void FluidSolver::Step(float dt) {
-    // 1. Advection (Semi-Lagrangian)
-    // Move velocity field along itself
-    Advect(u, u_prev, u_prev, v_prev, dt);
-    Advect(v, v_prev, u_prev, v_prev, dt);
+The solver implements Jos Stam's "Stable Fluids" algorithm, which consists of four major steps performed every frame:
 
-    // 2. Diffusion (Implicit Jacobi)
-    // Viscosity step (optional for low viscosity air, but stabilizes simulation)
-    Diffuse(u, u_prev, viscosity, dt);
-    Diffuse(v, v_prev, viscosity, dt);
+1.  **Advection (Transport)**:
+    This step moves quantities (velocity, density) through the grid based on the velocity field. We use a **Semi-Lagrangian** approach: for each cell center, we trace the velocity field backwards in time to find where the fluid particle came from, and interpolate the value from that location. This method is unconditionally stable, allowing for larger time steps.
 
-    // 3. Force Application
-    // Add external forces or reinforce inflow boundary
-    ApplyInflow();
+2.  **Diffusion (Viscosity)**:
+    Diffusion simulates the fluid's resistance to flow (viscosity). It spreads velocity values to neighboring cells. We solve this using an implicit method (Jacobi iteration) to ensure stability.
 
-    // 4. Projection (Enforce Incompressibility)
-    Project(u, v, p, div);
+3.  **External Forces (Inflow)**:
+    We apply external forces, such as the continuous inflow of wind from the left side of the domain, and enforce boundary conditions (walls and obstacles).
 
-    // 5. Advect Dye (for visualization)
-    Advect(dye, dye_prev, u, v, dt);
-}
-```
-
-### The Projection Step
-1.  **Compute Divergence**: $\nabla \cdot \mathbf{u}$
-2.  **Solve Poisson Equation**: $\nabla^2 p = \nabla \cdot \mathbf{u}$ using Jacobi iteration.
-    *   *Iterate 20-50 times.*
-    *   Check `s[]` mask to handle obstacles.
-3.  **Subtract Gradient**: $\mathbf{u}_{new} = \mathbf{u}_{old} - \nabla p$
+4.  **Projection (Incompressibility)**:
+    Real fluids (like air at low speeds) are incompressible. The projection step ensures that mass is conserved (what flows in must flow out).
+    *   **Compute Divergence**: Calculate how much fluid is expanding or compressing in each cell.
+    *   **Solve Pressure**: Solve the Poisson equation ($\nabla^2 p = \nabla \cdot \mathbf{u}$) to find a pressure field that counteracts the divergence.
+    *   **Subtract Gradient**: Subtract the pressure gradient from the velocity field to make it divergence-free.
 
 ---
 
@@ -104,7 +90,7 @@ The renderer uses OpenGL textures to upload grid data and display it on a full-s
 ### Shaders
 
 1.  **`FluidVisualization` Shader**
-    *   **Input**: Textures (`u_texture`, `v_texture`, `p_texture`, `mask_texture`), Uniform (`display_mode`).
+    *   **Input**: Textures (`velocityXTexture`, `velocityYTexture`, `pressureTexture`, `solidMaskTexture`), Uniform (`displayMode`).
     *   **Modes**:
         *   *Speed Heatmap*: `color = colormap(length(vec2(u, v)))`
         *   *Pressure*: `color = colormap(p)`
@@ -132,4 +118,3 @@ The renderer uses OpenGL textures to upload grid data and display it on a full-s
 *   **Day 11**: UI (ImGui) to tweak parameters (Viscosity, Speed, Angle).
 *   **Day 12-13**: Optimization and visual polish (Color palettes, nice rendering of the wing).
 *   **Day 14**: Final cleanup and documentation.
-```
