@@ -32,6 +32,7 @@ void main()
     float dyeDensity = texture(dyeDensityTexture, TexCoords).r;
     float solidMask = texture(solidMaskTexture, TexCoords).r;
 
+    // Check if the pixel is inside a solid object
     if (solidMask > 0.5) {
         FragColor = vec4(0.4, 0.4, 0.4, 1.0);
         return;

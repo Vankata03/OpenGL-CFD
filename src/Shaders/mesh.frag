@@ -17,6 +17,7 @@ void main()
     float diff = max(dot(normalize(v_Normal), lightDir), 0.0) * 0.5 + 0.5;
 
     vec3 baseColor = texture(meshTexture, v_TexCoords).rgb;
+
     // Fallback if texture is transparent or missing/white
     if (length(baseColor) < 0.1) baseColor = vec3(1.0);
 
