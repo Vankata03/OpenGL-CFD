@@ -1,4 +1,4 @@
-# 2D F1 Aerodynamic Flow Simulation - Design Document
+# 2D Flow Simulation - Design Document
 
 ## 1. Architecture Overview
 
